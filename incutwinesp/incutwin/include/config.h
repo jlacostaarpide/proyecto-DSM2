@@ -42,8 +42,8 @@
 // Sin objeto → ADC ≈ 0.  Con objeto cerca → ADC SUBE (más corriente por
 // R10+R11). PROX_THRESHOLD_DETECT : ADC > este valor → presencia detectada
 // PROX_THRESHOLD_RELEASE: ADC < este valor → presencia liberada (histéresis)
-#define PROX_THRESHOLD_DETECT 200  // ADC > 200  → objeto detectado
-#define PROX_THRESHOLD_RELEASE 100 // ADC < 100  → objeto retirado
+#define PROX_THRESHOLD_DETECT  15  // ADC > 15   → objeto detectado
+#define PROX_THRESHOLD_RELEASE  8  // ADC < 8    → objeto retirado
 // Alias invertidos eliminados — usar DETECT/RELEASE en lugar de LOW/HIGH
 #define PROX_THRESHOLD_LOW PROX_THRESHOLD_RELEASE
 #define PROX_THRESHOLD_HIGH PROX_THRESHOLD_DETECT

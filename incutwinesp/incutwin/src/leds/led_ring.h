@@ -36,4 +36,7 @@ namespace LedRing {
 
     bool selfTest();
     void runPhase1FadeLoop();  // Bucle de demo Fase 1: fade R→B→G→W
+
+    void startDemoSweep();     // Inicia barrido blanco no-bloqueante
+    bool updateDemoSweep();    // Avanza el barrido; devuelve true al completarse
 }

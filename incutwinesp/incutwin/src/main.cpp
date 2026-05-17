@@ -24,17 +24,19 @@
 #endif
 
 #if PHASE >= 3
-#include "state_machine/state_machine.h"
-#include "incunest_link/incunest_link.h"
+// #include "state_machine/state_machine.h"  // comentado — FSM no usado en demo
+// #include "incunest_link/incunest_link.h"   // comentado — IncuNest no usado en demo
 #endif
 
 // =============================================================================
 // ESTADO GLOBAL
 // =============================================================================
 #if PHASE >= 3
-static StateMachine fsm;
-static SystemState  _prevFsmState  = SystemState::BOOT;
-static bool         _handDetected  = false;
+enum DemoPhase : uint8_t { DEMO_WAIT, DEMO_SWEEP, DEMO_LINKED };
+static DemoPhase _demoPhase   = DEMO_WAIT;
+static uint8_t   _sweepLed    = 0;
+static uint32_t  _sweepTimer  = 0;
+static uint32_t  _lastDetTime = 0;
 #endif
 
 // Detección de presencia con histéresis y debounce
@@ -185,19 +187,13 @@ void setup() {
 
 #if PHASE >= 3
     // -----------------------------------------------------------------------
-    // FASE 3: Máquina de estados y lógica principal
+    // FASE 3: Demo de detección (IncuNest y FSM comentados)
     // -----------------------------------------------------------------------
-    LOG_INFO("BOOT", "Iniciando Fase 3 — Logica principal");
-    IncuNestLink::init();
-    fsm.begin();
-
-    if (WifiMgr::isConnected()) {
-        fsm.onWifiConnected();
-        if (TBClient::isConnected()) {
-            fsm.onServerConnected();
-        }
-    }
-    LOG_INFO("BOOT", "Fase 3 OK — FSM activa");
+    LOG_INFO("BOOT", "Iniciando Fase 3 — Demo modo");
+    // IncuNestLink::init();  // comentado
+    // fsm.begin();           // comentado
+    LedRing::clear();
+    LOG_INFO("BOOT", "Fase 3 OK — LEDs apagados, esperando deteccion");
 #endif
 
     LOG_INFO("BOOT", "Setup completo. IncuTwin operativo.\n");
@@ -234,86 +230,44 @@ void loop() {
         bool detR = alsSuppressed ? false : updateProxDetection(proxRight, adcR);
 
 #if PHASE >= 3
-        fsm.onProximityLeft(detL);
-        fsm.onProximityRight(detR);
+        // Demo: deteccion ADC > umbral → barrido blanco LED a LED (+beep) → azul LINKED
+        bool anyDet = (adcL > PROX_THRESHOLD_DETECT) || (adcR > PROX_THRESHOLD_DETECT);
+        if (anyDet) _lastDetTime = now;
 
-        // Feedback sonoro en eventos de detección
-        if (detL && !prevDetL) {
+        // Timeout 10s sin deteccion → apagar LEDs y resetear
+        if (_demoPhase != DEMO_WAIT && (now - _lastDetTime >= 10000)) {
+            _demoPhase = DEMO_WAIT;
+            LedRing::clear();
+            LOG_INFO("MAIN", "Demo: timeout sin deteccion — LEDs apagados");
+        }
+
+        if (_demoPhase == DEMO_WAIT && anyDet) {
+            _demoPhase  = DEMO_SWEEP;
+            _sweepLed   = 0;
+            _sweepTimer = now;
+            LedRing::setAll(0, 0, 0);
+            LedRing::setPixel(0, 255, 255, 255);
+            LedRing::show();
             Buzzer::beep(BUZZ_FREQ_PROX, BUZZ_DUR_PROX);
-        }
-        if (detR && !prevDetR) {
-            Buzzer::beep(BUZZ_FREQ_PROX, BUZZ_DUR_PROX);
-        }
-
-        // Desenlace al perder presencia
-        if ((!detL || !detR) && (prevDetL && prevDetR)) {
-            if (IncuNestLink::isLinked()) {
-                IncuNestLink::unlink("no_proximity");
-                fsm.onIncuNestUnlinked("no_proximity");
-                Buzzer::beepPattern(BUZZ_FREQ_DISCONNECT, BUZZ_DUR_DISCONNECT, 2, 120);
-            }
-        }
-
-        // --- Modo "Coge mi mano" — detectar cambios y publicar shared attrs (FR-304/307/309) ---
-        bool handDet = detL && detR;
-        bool proxChanged = (detL != prevDetL) || (detR != prevDetR);
-        bool handChanged = (handDet != _handDetected);
-
-        if ((proxChanged || handChanged) && TBClient::isConnected()) {
-            _handDetected = handDet;
-            StaticJsonDocument<256> attrs;
-            attrs["proximity_left"]     = detL;
-            attrs["proximity_right"]    = detR;
-            attrs["hand_detected"]      = _handDetected;
-            attrs["linked_incunest_id"] = IncuNestLink::getLinkedId();
-            attrs["device_state"]       = fsm.getStateName();
-            JsonObject attrObj = attrs.as<JsonObject>();
-            TBClient::sendSharedAttributes(attrObj);
-            LOG_INFO("MAIN", "Shared attrs: hand=%d proxL=%d proxR=%d",
-                     _handDetected, detL, detR);
-        } else if (handChanged) {
-            _handDetected = handDet;
-        }
-
-        prevDetL = detL;
-        prevDetR = detR;
-
-        // Iniciar búsqueda de IncuNest en STATE_SEARCHING
-        if (fsm.getState() == SystemState::SEARCHING && !IncuNestLink::isSearching()) {
-            IncuNestLink::startSearch();
-        }
-        IncuNestLink::update();
-
-        // Avanzar FSM
-        fsm.update();
-
-        // --- Publicar device_state cuando cambia el estado FSM (FR-309) ---
-        {
-            SystemState currState = fsm.getState();
-            if (currState != _prevFsmState) {
-                _prevFsmState = currState;
-                if (TBClient::isConnected()) {
-                    StaticJsonDocument<192> stateAttrs;
-                    stateAttrs["device_state"] = fsm.getStateName();
-                    if (currState == SystemState::IDLE ||
-                        currState == SystemState::SERVER_CONNECTED) {
-                        stateAttrs["hand_detected"]      = false;
-                        stateAttrs["linked_incunest_id"] = "";
-                    }
-                    JsonObject sObj = stateAttrs.as<JsonObject>();
-                    TBClient::sendSharedAttributes(sObj);
-                    LOG_INFO("MAIN", "device_state publicado: %s", fsm.getStateName());
+            LOG_INFO("MAIN", "Demo: deteccion L=%d R=%d — barrido iniciado", adcL, adcR);
+        } else if (_demoPhase == DEMO_SWEEP) {
+            if (now - _sweepTimer >= LED_BOOT_SWEEP_MS) {
+                _sweepTimer = now;
+                LedRing::setPixel(_sweepLed, 0, 0, 0);
+                _sweepLed++;
+                if (_sweepLed >= LED_RING_COUNT) {
+                    _demoPhase = DEMO_LINKED;
+                    LedRing::setAll(0, 80, 255);
+                    LedRing::show();
+                    LOG_INFO("MAIN", "Demo: conexion simulada — LINKED azul");
+                } else {
+                    LedRing::setPixel(_sweepLed, 255, 255, 255);
+                    LedRing::show();
+                    Buzzer::beep(BUZZ_FREQ_PROX, BUZZ_DUR_PROX);
                 }
             }
         }
-
-        // Actualizar estado extra del heartbeat
-        TBClient::setHeartbeatState(detL, detR, _handDetected, _alsValue,
-                                    fsm.getStateName(),
-                                    IncuNestLink::getLinkedId().c_str());
-
-        // Actualizar LED ring según estado FSM
-        LedRing::update(fsm.getState());
+        // DEMO_LINKED: LEDs azules fijos, nada que hacer
 
 #elif PHASE == 2
         // Fase 2: LED ring refleja estado de conectividad

@@ -14,6 +14,10 @@ static uint32_t _animTimer = 0;
 static uint8_t  _animStep  = 0;
 static SystemState _lastState = SystemState::BOOT;
 
+static bool     _sweepActive   = false;
+static uint8_t  _sweepPos      = 0;
+static uint32_t _sweepLedTimer = 0;
+
 namespace LedRing {
 
 void init() {
@@ -176,22 +180,20 @@ void update(SystemState state) {
         }
 
         case SystemState::SEARCHING: {
-            // Perseguidor circular amarillo (chase 2 Hz)
-            uint8_t pos = (uint8_t)((now / (LED_CHASE_PERIOD_MS / LED_RING_COUNT)) % LED_RING_COUNT);
-            for (int i = 0; i < LED_RING_COUNT; i++) {
-                _leds[i] = (i == pos) ? CRGB(255, 200, 0) : CRGB::Black;
-            }
+            if (_sweepActive) break;  // updateDemoSweep() controla los LEDs
+            // Respiración blanca lenta — esperando para conectar
+            uint8_t bri = sineWave(1000, 10, 80);
+            FastLED.setBrightness(bri);
+            setAll(255, 255, 255);
             FastLED.show();
+            FastLED.setBrightness(_brightness);
             break;
         }
 
         case SystemState::LINKED: {
-            // Verde latido sinusoidal ~800 ms
-            uint8_t bri = sineWave(LED_HEARTBEAT_PERIOD_MS, 5, 80);
-            FastLED.setBrightness(bri);
-            setAll(0, 255, 80);
+            // Azul sólido fuerte — conexión simulada exitosa
+            setAll(0, 80, 255);
             FastLED.show();
-            FastLED.setBrightness(_brightness);
             break;
         }
 
@@ -234,6 +236,35 @@ void runPhase1FadeLoop() {
     } else {
         _fadeVal++;
     }
+}
+
+void startDemoSweep() {
+    _sweepActive   = true;
+    _sweepPos      = 0;
+    _sweepLedTimer = millis();
+    FastLED.clear();
+    _leds[0] = CRGB::White;
+    FastLED.show();
+    LOG_INFO(TAG, "Demo sweep iniciado");
+}
+
+bool updateDemoSweep() {
+    if (!_sweepActive) return false;
+    uint32_t now = millis();
+    if (now - _sweepLedTimer < LED_BOOT_SWEEP_MS) return false;
+    _sweepLedTimer = now;
+    _leds[_sweepPos] = CRGB::Black;
+    _sweepPos++;
+    if (_sweepPos >= LED_RING_COUNT) {
+        _sweepActive = false;
+        FastLED.clear();
+        FastLED.show();
+        LOG_INFO(TAG, "Demo sweep completado");
+        return true;
+    }
+    _leds[_sweepPos] = CRGB::White;
+    FastLED.show();
+    return false;
 }
 
 } // namespace LedRing
