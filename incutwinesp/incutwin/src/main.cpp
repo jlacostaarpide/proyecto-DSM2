@@ -152,6 +152,8 @@ void setup() {
         LedRing::update(SystemState::WIFI_CONNECTED);
         LedRing::show();
 
+        FirebaseRTDB::init();
+
         String deviceName  = Provisioning::buildDeviceName();
         String token       = FlashStore::getString(NVS_KEY_TB_TOKEN);
         bool   provisioned = FlashStore::getBool(NVS_KEY_PROVISIONED, false);
@@ -212,6 +214,9 @@ void loop() {
     WifiMgr::update();
     if (WifiMgr::isConnected()) {
         TBClient::update();
+#if PHASE >= 3
+        FirebaseRTDB::update();
+#endif
     }
 #endif
 

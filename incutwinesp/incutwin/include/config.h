@@ -112,6 +112,11 @@
 // =============================================================================
 #define FIREBASE_RTDB_URL    "https://incutwinapp-default-rtdb.europe-west1.firebasedatabase.app"
 #define FIREBASE_INCUTWIN_ID "INCUTWIN-A1B2C3"
+#define FIREBASE_API_KEY     "AIzaSyANwzDWwczsHJgOa3EDcAoLpTVrv7YvHYI"
+#define FIREBASE_EMAIL       "IncutwinESP@incutwinapp.com"
+#define FIREBASE_PASS        "IncutwinESP"
+// Token refresh: renovar 10 min antes de que expire (60 min)
+#define FIREBASE_TOKEN_REFRESH_MS (50UL * 60UL * 1000UL)
 
 // =============================================================================
 // WATCHDOG
