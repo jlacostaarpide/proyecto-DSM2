@@ -26,6 +26,7 @@
 #if PHASE >= 3
 // #include "state_machine/state_machine.h"  // comentado — FSM no usado en demo
 // #include "incunest_link/incunest_link.h"   // comentado — IncuNest no usado en demo
+#include "comms/firebase_rtdb.h"
 #endif
 
 // =============================================================================
@@ -238,6 +239,7 @@ void loop() {
         if (_demoPhase != DEMO_WAIT && (now - _lastDetTime >= 10000)) {
             _demoPhase = DEMO_WAIT;
             LedRing::clear();
+            FirebaseRTDB::setHoldDetected(false);
             LOG_INFO("MAIN", "Demo: timeout sin deteccion — LEDs apagados");
         }
 
@@ -259,6 +261,7 @@ void loop() {
                     _demoPhase = DEMO_LINKED;
                     LedRing::setAll(0, 80, 255);
                     LedRing::show();
+                    FirebaseRTDB::setHoldDetected(true);
                     LOG_INFO("MAIN", "Demo: conexion simulada — LINKED azul");
                 } else {
                     LedRing::setPixel(_sweepLed, 255, 255, 255);

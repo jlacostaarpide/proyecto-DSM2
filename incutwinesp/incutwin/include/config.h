@@ -108,6 +108,12 @@
 #define LED_BOOT_SWEEP_MS 300     // ms por LED en barrido de arranque
 
 // =============================================================================
+// FIREBASE REALTIME DATABASE (demo)
+// =============================================================================
+#define FIREBASE_RTDB_URL    "https://incutwinapp-default-rtdb.europe-west1.firebasedatabase.app"
+#define FIREBASE_INCUTWIN_ID "INCUTWIN-A1B2C3"
+
+// =============================================================================
 // WATCHDOG
 // =============================================================================
 #define WDT_TIMEOUT_S 30
