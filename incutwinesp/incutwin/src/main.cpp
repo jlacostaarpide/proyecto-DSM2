@@ -34,10 +34,11 @@
 // =============================================================================
 #if PHASE >= 3
 enum DemoPhase : uint8_t { DEMO_WAIT, DEMO_SWEEP, DEMO_LINKED };
-static DemoPhase _demoPhase   = DEMO_WAIT;
-static uint8_t   _sweepLed    = 0;
-static uint32_t  _sweepTimer  = 0;
-static uint32_t  _lastDetTime = 0;
+static DemoPhase _demoPhase       = DEMO_WAIT;
+static uint8_t   _sweepLed        = 0;
+static uint32_t  _sweepTimer      = 0;
+static uint32_t  _lastDetTime     = 0;
+static String    _linkedIncutwinId = "";
 #endif
 
 // Detección de presencia con histéresis y debounce
@@ -242,9 +243,12 @@ void loop() {
 
         // Timeout 10s sin deteccion → apagar LEDs y resetear
         if (_demoPhase != DEMO_WAIT && (now - _lastDetTime >= 10000)) {
+            if (!_linkedIncutwinId.isEmpty()) {
+                FirebaseRTDB::setHoldDetected(_linkedIncutwinId, false);
+                _linkedIncutwinId = "";
+            }
             _demoPhase = DEMO_WAIT;
             LedRing::clear();
-            FirebaseRTDB::setHoldDetected(false);
             LOG_INFO("MAIN", "Demo: timeout sin deteccion — LEDs apagados");
         }
 
@@ -263,11 +267,20 @@ void loop() {
                 LedRing::setPixel(_sweepLed, 0, 0, 0);
                 _sweepLed++;
                 if (_sweepLed >= LED_RING_COUNT) {
-                    _demoPhase = DEMO_LINKED;
-                    LedRing::setAll(0, 80, 255);
-                    LedRing::show();
-                    FirebaseRTDB::setHoldDetected(true);
-                    LOG_INFO("MAIN", "Demo: conexion simulada — LINKED azul");
+                    // Buscar la primera incutwin en línea
+                    _linkedIncutwinId = FirebaseRTDB::findFirstOnlineId();
+                    if (!_linkedIncutwinId.isEmpty()) {
+                        _demoPhase = DEMO_LINKED;
+                        LedRing::setAll(0, 80, 255);
+                        LedRing::show();
+                        FirebaseRTDB::setHoldDetected(_linkedIncutwinId, true);
+                        LOG_INFO("MAIN", "Demo: LINKED → %s", _linkedIncutwinId.c_str());
+                    } else {
+                        // Ninguna incutwin en línea — no activar
+                        _demoPhase = DEMO_WAIT;
+                        LedRing::clear();
+                        LOG_WARN("MAIN", "Demo: ninguna incutwin en linea — cancelando");
+                    }
                 } else {
                     LedRing::setPixel(_sweepLed, 255, 255, 255);
                     LedRing::show();

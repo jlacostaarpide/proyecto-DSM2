@@ -1,7 +1,9 @@
 #pragma once
+#include <Arduino.h>
 
 namespace FirebaseRTDB {
-    void init();             // llamar una vez tras conectar WiFi
-    void update();           // llamar desde loop() para renovar token
-    void setHoldDetected(bool value);
+    void   init();
+    void   update();
+    String findFirstOnlineId();                          // busca la primera incutwin con enLinea=true
+    void   setHoldDetected(const String& id, bool value);
 }

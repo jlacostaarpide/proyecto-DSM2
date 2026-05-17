@@ -62,36 +62,80 @@ void update() {
     }
 }
 
-void setHoldDetected(bool value) {
-    if (WiFi.status() != WL_CONNECTED) {
-        LOG_WARN(TAG, "Sin WiFi — holdDetected no enviado");
-        return;
-    }
+String findFirstOnlineId() {
+    if (WiFi.status() != WL_CONNECTED) return "";
+
+    // Renovar token si está vacío
     if (gIdToken.isEmpty()) {
-        LOG_WARN(TAG, "Sin token — holdDetected no enviado");
+        gIdToken = fetchToken();
+        gTokenObtainedAt = millis();
+    }
+    if (gIdToken.isEmpty()) return "";
+
+    for (int intento = 0; intento < 2; intento++) {
+        WiFiClientSecure client;
+        client.setInsecure();
+        HTTPClient http;
+
+        String url = String(FIREBASE_RTDB_URL) + "/incutwins.json?auth=" + gIdToken;
+        http.begin(client, url);
+
+        String foundId = "";
+        int code = http.GET();
+        if (code == 200) {
+            DynamicJsonDocument doc(4096);
+            if (!deserializeJson(doc, http.getString())) {
+                for (JsonPair kv : doc.as<JsonObject>()) {
+                    if (kv.value()["enLinea"] == true && kv.value()["conBebe"] == true) {
+                        foundId = kv.key().c_str();
+                        break;
+                    }
+                }
+            }
+            http.end();
+            if (foundId.isEmpty()) LOG_WARN(TAG, "Ninguna incutwin en linea con bebe");
+            else                   LOG_INFO(TAG, "Primera activa con bebe: %s", foundId.c_str());
+            return foundId;
+        } else {
+            LOG_WARN(TAG, "findFirstOnlineId HTTP=%d (intento %d)", code, intento + 1);
+            http.end();
+            if (code == 401) {
+                // Renovar token y reintentar una vez
+                gIdToken = fetchToken();
+                gTokenObtainedAt = millis();
+            } else {
+                break;
+            }
+        }
+    }
+    return "";
+}
+
+void setHoldDetected(const String& incutwinId, bool value) {
+    if (incutwinId.isEmpty()) return;
+    if (WiFi.status() != WL_CONNECTED || gIdToken.isEmpty()) {
+        LOG_WARN(TAG, "Sin WiFi/token — holdDetected no enviado");
         return;
     }
 
     WiFiClientSecure client;
     client.setInsecure();
-
     HTTPClient http;
+
     String url = String(FIREBASE_RTDB_URL)
-               + "/incutwins/" + FIREBASE_INCUTWIN_ID
+               + "/incutwins/" + incutwinId
                + "/holdDetected.json?auth=" + gIdToken;
 
     http.begin(client, url);
     http.addHeader("Content-Type", "application/json");
 
     int code = http.PUT(value ? "true" : "false");
-
     if (code == 200) {
-        LOG_INFO(TAG, "holdDetected=%s OK", value ? "true" : "false");
+        LOG_INFO(TAG, "holdDetected=%s OK → %s", value ? "true" : "false", incutwinId.c_str());
     } else {
-        LOG_WARN(TAG, "holdDetected=%s HTTP=%d", value ? "true" : "false", code);
-        if (code == 401) gIdToken = ""; // forzar renovación en próximo update()
+        LOG_WARN(TAG, "holdDetected HTTP=%d", code);
+        if (code == 401) gIdToken = "";
     }
-
     http.end();
 }
 
